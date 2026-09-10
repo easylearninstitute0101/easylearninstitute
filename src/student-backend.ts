@@ -10,18 +10,16 @@ async function currentUserAndInstitute() {
   const user = sessionData.session?.user
   if (!user) return null
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('institute_id')
-    .eq('id', user.id)
-    .single()
+  // Resolve the institute through the secure database function.
+  // This also repairs an existing profile that has no institute_id.
+  const { data: instituteId, error } = await supabase.rpc('ensure_my_institute')
 
-  if (error || !data?.institute_id) {
-    console.warn('Could not resolve institute for current user.', error?.message)
+  if (error || !instituteId) {
+    console.warn('Could not find your institute.', error?.message)
     return null
   }
 
-  return { user, instituteId: data.institute_id }
+  return { user, instituteId: instituteId as string }
 }
 
 function mapRow(row: any) {
@@ -54,6 +52,7 @@ export async function refreshStudents() {
 
   if (error) {
     console.warn('Student sync failed:', error.message)
+    alert(`Student load failed: ${error.message}`)
     return
   }
 
@@ -63,7 +62,10 @@ export async function refreshStudents() {
 
 async function insertStudent(student: any) {
   const context = await currentUserAndInstitute()
-  if (!context) return
+  if (!context) {
+    alert('Could not find your institute. Please log out and log in again.')
+    return
+  }
 
   const { data, error } = await supabase
     .from('students')
@@ -97,6 +99,9 @@ async function insertStudent(student: any) {
   else studentCache.unshift(mapped)
   ready = true
   lastWrittenIds.add(mapped.id)
+
+  // Confirm the database state after a successful insert.
+  await refreshStudents()
 }
 
 const originalGetItem = Storage.prototype.getItem
