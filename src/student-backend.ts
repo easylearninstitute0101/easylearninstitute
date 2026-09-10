@@ -5,7 +5,7 @@ let studentCache: any[] = []
 let ready = false
 let lastWrittenIds = new Set<string>()
 
-async function currentInstituteId(): Promise<string | null> {
+async function currentUserAndInstitute() {
   const { data: sessionData } = await supabase.auth.getSession()
   const user = sessionData.session?.user
   if (!user) return null
@@ -21,19 +21,19 @@ async function currentInstituteId(): Promise<string | null> {
     return null
   }
 
-  return data.institute_id
+  return { user, instituteId: data.institute_id }
 }
 
 function mapRow(row: any) {
   return {
     id: row.student_id || row.id,
-    name: row.name || '',
+    name: row.full_name || '',
     phone: row.phone || '',
     batch: '',
     fee: 0,
     status: row.status || 'Active',
-    email: '',
-    dob: row.dob || '',
+    email: row.email || '',
+    dob: row.date_of_birth || '',
     gender: row.gender || '',
     guardian: row.guardian_name || '',
     guardianPhone: row.guardian_phone || '',
@@ -43,13 +43,13 @@ function mapRow(row: any) {
 }
 
 async function loadStudents() {
-  const instituteId = await currentInstituteId()
-  if (!instituteId) return
+  const context = await currentUserAndInstitute()
+  if (!context) return
 
   const { data, error } = await supabase
     .from('students')
-    .select('id,institute_id,student_id,name,phone,guardian_name,guardian_phone,address,dob,gender,admission_date,status')
-    .eq('institute_id', instituteId)
+    .select('id,institute_id,user_id,student_id,full_name,phone,email,guardian_name,guardian_phone,address,date_of_birth,gender,admission_date,status')
+    .eq('institute_id', context.instituteId)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -62,29 +62,32 @@ async function loadStudents() {
 }
 
 async function insertStudent(student: any) {
-  const instituteId = await currentInstituteId()
-  if (!instituteId) return
+  const context = await currentUserAndInstitute()
+  if (!context) return
 
   const { data, error } = await supabase
     .from('students')
     .insert({
-      institute_id: instituteId,
+      institute_id: context.instituteId,
+      user_id: context.user.id,
       student_id: student.id,
-      name: student.name,
+      full_name: student.name,
       phone: student.phone,
+      email: student.email || null,
       guardian_name: student.guardian || null,
       guardian_phone: student.guardianPhone || null,
       address: student.address || null,
-      dob: student.dob || null,
+      date_of_birth: student.dob || null,
       gender: student.gender || null,
       admission_date: student.admissionDate || null,
       status: student.status || 'Active'
     })
-    .select('id,institute_id,student_id,name,phone,guardian_name,guardian_phone,address,dob,gender,admission_date,status')
+    .select('id,institute_id,user_id,student_id,full_name,phone,email,guardian_name,guardian_phone,address,date_of_birth,gender,admission_date,status')
     .single()
 
   if (error) {
     console.error('Student save failed:', error.message)
+    alert(`Student save failed: ${error.message}`)
     return
   }
 
