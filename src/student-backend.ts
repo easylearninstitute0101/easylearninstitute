@@ -42,13 +42,13 @@ function mapRow(row: any) {
   }
 }
 
-async function loadStudents() {
+export async function refreshStudents() {
   const context = await currentUserAndInstitute()
   if (!context) return
 
   const { data, error } = await supabase
     .from('students')
-    .select('id,institute_id,user_id,student_id,full_name,phone,email,guardian_name,guardian_phone,address,date_of_birth,gender,admission_date,status')
+    .select('id,institute_id,user_id,student_id,full_name,phone,email,guardian_name,guardian_phone,address,date_of_birth,gender,admission_date,status,created_at,updated_at')
     .eq('institute_id', context.instituteId)
     .order('created_at', { ascending: false })
 
@@ -82,7 +82,7 @@ async function insertStudent(student: any) {
       admission_date: student.admissionDate || null,
       status: student.status || 'Active'
     })
-    .select('id,institute_id,user_id,student_id,full_name,phone,email,guardian_name,guardian_phone,address,date_of_birth,gender,admission_date,status')
+    .select('id,institute_id,user_id,student_id,full_name,phone,email,guardian_name,guardian_phone,address,date_of_birth,gender,admission_date,status,created_at,updated_at')
     .single()
 
   if (error) {
@@ -115,6 +115,7 @@ Storage.prototype.setItem = function(key: string, value: string) {
     const previousIds = new Set(studentCache.map(x => x.id))
     const added = next.filter(x => x?.id && !previousIds.has(x.id) && !lastWrittenIds.has(x.id))
     studentCache = next
+    ready = true
 
     for (const student of added) void insertStudent(student)
     return
@@ -125,11 +126,11 @@ Storage.prototype.setItem = function(key: string, value: string) {
 
 supabase.auth.onAuthStateChange((_event, session) => {
   if (session) {
-    window.setTimeout(() => { void loadStudents() }, 0)
+    window.setTimeout(() => { void refreshStudents() }, 0)
   } else {
     studentCache = []
     ready = false
   }
 })
 
-void loadStudents()
+void refreshStudents()
