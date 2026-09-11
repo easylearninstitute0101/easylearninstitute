@@ -45574,7 +45574,7 @@ case 6:m=b
 k=$.db().b
 k===$&&A.a()
 s=7
-return A.t(k.iE("fees").ls("id,student_id,fee_type,amount,discount,due_amount,due_date,status,created_at").hG("institute_id",m).Lv("created_at",!1),$async$bp)
+return A.t(k.iE("fees").ls("id,student_id,fee_type,amount,due_date,status,created_at").hG("institute_id",m).Lv("created_at",!1),$async$bp)
 case 7:n.d=b
 o.push(5)
 s=4
@@ -45620,12 +45620,12 @@ $2(a,b){var s,r,q,p=null,o=this.a,n=J.e1(o.d,b),m=n.h(0,"fee_type")
 m=A.j(m==null?"Fee":m)
 s=n.h(0,"amount")
 m=A.aX(m+" \u2022 \u09f3"+A.j(s==null?0:s),p,p,p,p,p,p)
-s=n.h(0,"due_amount")
+s=n.h(0,"amount")
 s=A.j(s==null?0:s)
 r=n.h(0,"status")
 r=A.j(r==null?"":r)
 q=n.h(0,"student_id")
-return A.tw(A.a9W(!1,p,p,p,!0,p,p,!0,!0,p,p,p,p,p,p,!1,p,p,p,p,A.aX("Due: \u09f3"+s+" \u2022 "+r+"\nStudent: "+A.j(q==null?"":q),p,p,p,p,p,p),p,m,p,new A.A5(B.a0I,new A.aqP(o,this.b,n),p,p,p,p,B.v,p,!1,p,!0,p,B.Zs,p),p))},
+return A.tw(A.a9W(!1,p,p,p,!0,p,p,!0,!0,p,p,p,p,p,p,!1,p,p,p,p,A.aX("Amount: \u09f3"+s+" \u2022 "+r+"\nStudent: "+A.j(q==null?"":q),p,p,p,p,p,p),p,m,p,new A.A5(B.a0I,new A.aqP(o,this.b,n),p,p,p,p,B.v,p,!1,p,!0,p,B.Zs,p),p))},
 $S:71}
 A.aqP.prototype={
 $0(){var s=A.k2(new A.aqN(this.c),null,t.z)
@@ -45670,28 +45670,28 @@ break
 case 5:return A.E(null,r)
 case 1:return A.D(p.at(-1),r)}})
 return A.F($async$bp,r)},
-d7(){var s=0,r=A.G(t.H),q,p=2,o=[],n=[],m=this,l,k,j,i,h,g,f,e,d
+d7(){var s=0,r=A.G(t.H),q,p=2,o=[],n=[],m=this,l,k,j,i,h,g,f,e
 var $async$d7=A.H(function(a,b){if(a===1){o.push(b)
 s=p}for(;;)switch(s){case 0:h=A.ik(m.f.a.a)
 g=h==null?0:h
 f=A.ik(m.r.a.a)
-e=f==null?0:f
-if(m.e==null||g<=0||e>g){s=1
+if(f==null)f=0
+if(m.e==null||g<=0||f>g){s=1
 break}m.a_(new A.aqL(m))
 p=4
 k=m.e
 j=B.c.bE(m.w.a.a)
 if(j.length===0)j="Other"
 s=7
-return A.t(A.qS("fees",A.a3(["student_id",k,"fee_type",j,"amount",g,"discount",e,"due_amount",g-e,"due_date",B.c.S(new A.cH(Date.now(),0,!1).x0(),0,10),"status","due"],t.N,t.z)),$async$d7)
+return A.t(A.qS("fees",A.a3(["student_id",k,"fee_type",j,"amount",g,"due_date",B.c.S(new A.cH(Date.now(),0,!1).x0(),0,10),"status","due"],t.N,t.z)),$async$d7)
 case 7:k=m.c
 if(k!=null)A.de(k,!1).l8(null)
 n.push(6)
 s=5
 break
 case 4:p=3
-d=o.pop()
-l=A.X(d)
+e=o.pop()
+l=A.X(e)
 k=m.c
 if(k!=null){j=A.j(l)
 k.a8(t.J).f.hu(A.fy(null,null,null,null,null,B.D,null,A.aX(j,null,null,null,null,null,null),null,B.bb,null,null,null,null,null,null,null,null,null,null))}n.push(6)
@@ -45785,8 +45785,8 @@ l(){var s=this.d
 s.O$=$.ai()
 s.J$=0
 this.aC()},
-I(a){var s,r,q,p,o=this,n=null,m=A.kF(n,B.Zx),l=o.a.c.h(0,"due_amount")
-l=A.aX("Due: \u09f3"+A.j(l==null?0:l),n,n,n,A.S(a).ok.w,n,n)
+I(a){var s,r,q,p,o=this,n=null,m=A.kF(n,B.Zx),l=o.a.c.h(0,"amount")
+l=A.aX("Amount: \u09f3"+A.j(l==null?0:l),n,n,n,A.S(a).ok.w,n,n)
 s=A.dW(o.d,B.JF,B.fF,1,!1,n)
 r=A.a4D(B.JO,o.e,B.Ly,new A.aoX(o),t.N)
 q=o.f
