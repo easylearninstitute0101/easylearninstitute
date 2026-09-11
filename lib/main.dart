@@ -17,10 +17,9 @@ class EasyLearnApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const blue = Color(0xff155EEF);
-    const orange = Color(0xffF79009);
     final scheme = ColorScheme.fromSeed(seedColor: blue, brightness: Brightness.light).copyWith(
       primary: blue,
-      secondary: orange,
+      secondary: const Color(0xff3B82F6),
       surface: Colors.white,
     );
     return MaterialApp(
@@ -40,7 +39,9 @@ class EasyLearnApp extends StatelessWidget {
           elevation: 0,
           margin: EdgeInsets.zero,
           color: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18))),
+          shadowColor: Color(0x14155EEF),
+          surfaceTintColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(20))),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -218,7 +219,12 @@ class Dashboard extends StatefulWidget {
 }
 
 class _DashboardState extends State<Dashboard> {
-  Map<String, String> stats = {};
+  Map<String, String> stats = {
+    'Students': '0',
+    'Batches': '0',
+    'Staff': '0',
+    'Collection': '${AppConfig.currency} 0',
+  };
   bool loading = true;
 
   @override
@@ -227,31 +233,83 @@ class _DashboardState extends State<Dashboard> {
     load();
   }
 
+  Future<int> _safeCount(String table, String instituteId) async {
+    try {
+      final rows = await Repo.db
+          .from(table)
+          .select('id')
+          .eq('institute_id', instituteId);
+      return rows.length;
+    } catch (error) {
+      debugPrint('Dashboard $table: $error');
+      return 0;
+    }
+  }
+
+  Future<double> _safeCollection(String instituteId) async {
+    try {
+      final start = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        1,
+      ).toIso8601String();
+      final payments = await Repo.db
+          .from('fee_payments')
+          .select('amount')
+          .eq('institute_id', instituteId)
+          .gte('paid_at', start);
+      return payments.fold<double>(
+        0,
+        (sum, row) =>
+            sum + ((row['amount'] as num?)?.toDouble() ?? 0),
+      );
+    } catch (error) {
+      // Payment RLS/schema problems must never hide the other dashboard counts.
+      debugPrint('Dashboard fee_payments: $error');
+      return 0;
+    }
+  }
+
   Future<void> load() async {
+    if (mounted) setState(() => loading = true);
     try {
       final instituteId = await Repo.tenant();
-      final students = await Repo.db.from('students').select('id').eq('institute_id', instituteId);
-      final batches = await Repo.db.from('batches').select('id').eq('institute_id', instituteId);
-      final teachers = await Repo.db.from('teachers').select('id').eq('institute_id', instituteId);
-      final start = DateTime(DateTime.now().year, DateTime.now().month, 1).toIso8601String();
-      final payments = await Repo.db.from('fee_payments').select('amount').eq('institute_id', instituteId).gte('paid_at', start);
-      final total = payments.fold<double>(0, (sum, row) => sum + ((row['amount'] as num?)?.toDouble() ?? 0));
+
+      // Load every metric independently. One failing table must not reset all cards to 0.
+      final studentsFuture = _safeCount('students', instituteId);
+      final batchesFuture = _safeCount('batches', instituteId);
+      final teachersFuture = _safeCount('teachers', instituteId);
+      final collectionFuture = _safeCollection(instituteId);
+
+      final students = await studentsFuture;
+      final batches = await batchesFuture;
+      final teachers = await teachersFuture;
+      final total = await collectionFuture;
 
       if (mounted) {
         setState(() {
           stats = {
-            'Students': '${students.length}',
-            'Batches': '${batches.length}',
-            'Staff': '${teachers.length}',
-            'Collection': '${AppConfig.currency} ${NumberFormat('#,##0').format(total)}',
+            'Students': '$students',
+            'Batches': '$batches',
+            'Staff': '$teachers',
+            'Collection':
+                '${AppConfig.currency} ${NumberFormat('#,##0').format(total)}',
           };
         });
       }
     } catch (error) {
-      debugPrint('Dashboard: $error');
+      debugPrint('Dashboard tenant: $error');
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  Future<void> _open(Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
+    if (mounted) await load();
   }
 
   @override
@@ -262,36 +320,331 @@ class _DashboardState extends State<Dashboard> {
       ('Staff', stats['Staff'] ?? '0', Icons.badge_rounded),
       ('Collection', stats['Collection'] ?? '${AppConfig.currency} 0', Icons.account_balance_wallet_rounded),
     ];
+
     return RefreshIndicator(
+      color: const Color(0xff155EEF),
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.only(bottom: 28),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 30),
         children: [
           const Top('Easylearn Institute'),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xff155EEF), Color(0xff3B82F6)]), borderRadius: BorderRadius.circular(22), boxShadow: const [BoxShadow(color: Color(0x24155EEF), blurRadius: 24, offset: Offset(0, 10))]), child: Row(children: [Container(width: 52, height: 52, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .16), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.school_rounded, color: Colors.white, size: 28)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Institute Dashboard', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text('Role: ${widget.role}', style: const TextStyle(color: Color(0xffDCE8FF))), Text(DateFormat('EEEE, dd MMM yyyy').format(DateTime.now()), style: const TextStyle(color: Color(0xffDCE8FF), fontSize: 12))]))]))),
-          const SizedBox(height: 18),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text('Overview', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xff0F5FEF), Color(0xff3B82F6)],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x26155EEF),
+                    blurRadius: 26,
+                    offset: Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .16),
+                      borderRadius: BorderRadius.circular(17),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .18),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.school_rounded,
+                      color: Colors.white,
+                      size: 29,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Institute Dashboard',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'Role: ${widget.role}',
+                          style: const TextStyle(
+                            color: Color(0xffE7EEFF),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('EEEE, dd MMM yyyy').format(DateTime.now()),
+                          style: const TextStyle(
+                            color: Color(0xffD7E5FF),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh dashboard',
+                    onPressed: loading ? null : load,
+                    icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Overview',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xff101828),
+                      ),
+                ),
+                Text(
+                  'Live data',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xff667085),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 10),
-          if (loading) const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())) else LayoutBuilder(builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 1050 ? 4 : (constraints.maxWidth >= 620 ? 2 : 1);
-            final ratio = columns == 4 ? 2.0 : (columns == 2 ? 1.9 : 2.05);
-            return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1200), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: items.length, gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: ratio), itemBuilder: (_, i) { final x=items[i]; return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: i == 3 ? const Color(0xfffff4e5) : const Color(0xffeef4ff), borderRadius: BorderRadius.circular(12)), child: Icon(x.$3, color: i == 3 ? const Color(0xffDC6803) : const Color(0xff155EEF))), Icon(Icons.arrow_forward_rounded, size: 18, color: const Color(0xff98A2B3))]), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(x.$1, style: const TextStyle(color: Color(0xff667085), fontSize: 12, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Text(x.$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xff101828)))]))); })));
-          }),
-          const SizedBox(height: 20),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text('Quick actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.all(44),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 1050
+                      ? 4
+                      : (constraints.maxWidth >= 620 ? 2 : 1);
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: items.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: columns == 1 ? 2.25 : 1.78,
+                    ),
+                    itemBuilder: (_, i) {
+                      final item = items[i];
+                      return Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            if (i == 0) _open(const StudentsPage());
+                            if (i == 1) _open(const BatchesPage());
+                            if (i == 2) _open(MorePage(role: widget.role));
+                            if (i == 3) _open(const FeesPage());
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xffE6ECF5)),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0F155EEF),
+                                  blurRadius: 14,
+                                  offset: Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xffEEF4FF),
+                                        borderRadius: BorderRadius.circular(13),
+                                      ),
+                                      child: Icon(item.$3, color: const Color(0xff155EEF)),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 19,
+                                      color: Color(0xff98A2B3),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.$1,
+                                      style: const TextStyle(
+                                        color: Color(0xff667085),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      item.$2,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xff101828),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 22),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Quick actions',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xff101828),
+                  ),
+            ),
+          ),
           const SizedBox(height: 10),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Row(children: [Expanded(child: _QuickAction(icon: Icons.person_add_alt_1_rounded, label: 'Add Student', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentFormPage())))), const SizedBox(width: 10), Expanded(child: _QuickAction(icon: Icons.add_box_rounded, label: 'Add Batch', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BatchFormPage())))), const SizedBox(width: 10), Expanded(child: _QuickAction(icon: Icons.receipt_long_rounded, label: 'Create Fee', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeeFormPage()))))])),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 620;
+                final actions = [
+                  _QuickActionData(Icons.person_add_alt_1_rounded, 'Add Student', () { _open(const StudentFormPage()); }),
+                  _QuickActionData(Icons.add_box_rounded, 'Add Batch', () { _open(const BatchFormPage()); }),
+                  _QuickActionData(Icons.receipt_long_rounded, 'Create Fee', () { _open(const FeeFormPage()); }),
+                ];
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: actions.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: compact ? 1 : 3,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: compact ? 5.4 : 2.8,
+                  ),
+                  itemBuilder: (_, i) => _QuickAction(
+                    icon: actions[i].icon,
+                    label: actions[i].label,
+                    onTap: actions[i].onTap,
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
+class _QuickActionData {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickActionData(this.icon, this.label, this.onTap);
 }
 
 class _QuickAction extends StatelessWidget {
-  final IconData icon; final String label; final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
   const _QuickAction({required this.icon, required this.label, required this.onTap});
-  @override Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(16), child: Container(padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xffEAECF0))), child: Column(children: [Icon(icon, color: const Color(0xff155EEF)), const SizedBox(height: 7), Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xff344054)))])));
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xffE4EAF3)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0C155EEF),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xffEEF4FF),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: const Color(0xff155EEF), size: 19),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff344054),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class StudentsPage extends StatefulWidget {
@@ -687,7 +1040,7 @@ class _FeesPageState extends State<FeesPage> {
   Future<void> load() async {
     try {
       final instituteId = await Repo.tenant();
-      rows = await Repo.db.from('fees').select('id,student_id,fee_type,amount,discount,due_amount,due_date,status,created_at').eq('institute_id', instituteId).order('created_at', ascending: false);
+      rows = await Repo.db.from('fees').select('id,student_id,fee_type,amount,due_date,status,created_at').eq('institute_id', instituteId).order('created_at', ascending: false);
     } catch (error) {
       if (mounted) showMessage(context, '$error');
     } finally {
@@ -720,7 +1073,7 @@ class _FeesPageState extends State<FeesPage> {
                     return Card(
                       child: ListTile(
                         title: Text('${row['fee_type'] ?? 'Fee'} • ${AppConfig.currency}${row['amount'] ?? 0}'),
-                        subtitle: Text('Due: ${AppConfig.currency}${row['due_amount'] ?? 0} • ${row['status'] ?? ''}\nStudent: ${row['student_id'] ?? ''}'),
+                        subtitle: Text('Amount: ${AppConfig.currency}${row['amount'] ?? 0} • ${row['status'] ?? ''}\nStudent: ${row['student_id'] ?? ''}'),
                         isThreeLine: true,
                         trailing: FilledButton.tonal(
                           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CollectPaymentPage(fee: row))).then((_) => load()),
@@ -768,18 +1121,31 @@ class _FeeFormPageState extends State<FeeFormPage> {
   Future<void> save() async {
     final value = double.tryParse(amount.text) ?? 0;
     final discountValue = double.tryParse(discount.text) ?? 0;
-    if (student == null || value <= 0 || discountValue > value) return;
+    if (student == null) {
+      showMessage(context, 'Please select a student.');
+      return;
+    }
+    if (value <= 0) {
+      showMessage(context, 'Please enter a valid fee amount.');
+      return;
+    }
+    if (discountValue < 0 || discountValue > value) {
+      showMessage(context, 'Discount cannot be greater than the fee amount.');
+      return;
+    }
 
     setState(() => busy = true);
     try {
       await Repo.insert('fees', {
         'student_id': student,
+        'title': type.text.trim().isEmpty ? 'Monthly Fee' : type.text.trim(),
         'fee_type': type.text.trim().isEmpty ? 'Other' : type.text.trim(),
         'amount': value,
         'discount': discountValue,
+        'paid_amount': 0,
         'due_amount': value - discountValue,
         'due_date': DateTime.now().toIso8601String().substring(0, 10),
-        'status': 'due',
+        'status': 'unpaid',
       });
       if (mounted) Navigator.pop(context);
     } catch (error) {
@@ -876,7 +1242,7 @@ class _CollectPaymentPageState extends State<CollectPaymentPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Due: ${AppConfig.currency}${widget.fee['due_amount'] ?? 0}', style: Theme.of(context).textTheme.titleMedium),
+          Text('Fee: ${AppConfig.currency}${widget.fee['amount'] ?? 0}', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Payment amount (৳)')),
           const SizedBox(height: 12),
@@ -1173,7 +1539,7 @@ class _GenericModulePageState extends State<GenericModulePage> {
                               decoration: BoxDecoration(color: const Color(0xffEEF4FF), borderRadius: BorderRadius.circular(13)),
                               child: const Icon(Icons.description_rounded, color: Color(0xff155EEF)),
                             ),
-                            title: Text('$label', style: const TextStyle(fontWeight: FontWeight.w750)),
+                            title: Text('$label', style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: status == null ? null : Text('Status: $status'),
                             trailing: amount == null ? null : Text('৳${amount}', style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xff155EEF))),
                           ),
